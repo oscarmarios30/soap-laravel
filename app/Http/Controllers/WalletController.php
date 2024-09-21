@@ -1,24 +1,46 @@
 <?php
 
-// app/Http/Controllers/WalletController.php
 namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class WalletController extends Controller
 {
     public function registerClient(Request $request)
     {
-        $validated = $request->validate([
-            'document' => 'required|unique:clients',
+        $validator = Validator::make($request->all(), [
+            'document' => 'required',
             'name' => 'required',
-            'email' => 'required|email|unique:clients',
+            'email' => 'required|email',
             'phone' => 'required',
         ]);
 
-        $client = Client::create($validated);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'cod_error' => '01',
+                'message_error' => 'Faltan campos requeridos o son inválidos.',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        $existingClient = Client::where('document', $request->document)
+                                ->orWhere('email', $request->email)
+                                ->orWhere('phone', $request->phone)
+                                ->first();
+
+        if ($existingClient) {
+            return response()->json([
+                'success' => false,
+                'cod_error' => '01',
+                'message_error' => 'Cliente ya registrado con el documento, email o teléfono proporcionado.',
+            ]);
+        }
+
+        $client = Client::create($validator->validated());
 
         Wallet::create([
             'client_id' => $client->id,
@@ -35,6 +57,21 @@ class WalletController extends Controller
 
     public function rechargeWallet(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'document' => 'required',
+            'phone' => 'required',
+            'amount' => 'required|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'cod_error' => '01',
+                'message_error' => 'Faltan campos requeridos o son inválidos.',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
         $client = Client::where('document', $request->document)
                         ->where('phone', $request->phone)
                         ->first();
@@ -61,6 +98,20 @@ class WalletController extends Controller
 
     public function pay(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'document' => 'required',
+            'amount' => 'required|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'cod_error' => '01',
+                'message_error' => 'Faltan campos requeridos o son inválidos.',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
         $client = Client::where('document', $request->document)->first();
 
         if (!$client || $client->wallet->balance < $request->amount) {
@@ -71,12 +122,8 @@ class WalletController extends Controller
             ]);
         }
 
-        // Generar token y simular envío por correo
         $token = rand(100000, 999999);
         $sessionId = uniqid();
-
-        // Simulación de enviar token al correo
-        // Mail::to($client->email)->send(new PaymentTokenMail($token));
 
         return response()->json([
             'success' => true,
@@ -91,7 +138,6 @@ class WalletController extends Controller
 
     public function confirmPayment(Request $request)
     {
-        // Aquí se simula la validación del token y el sessionId para confirmar el pago
         return response()->json([
             'success' => true,
             'cod_error' => '00',
@@ -101,6 +147,20 @@ class WalletController extends Controller
 
     public function checkBalance(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'document' => 'required',
+            'phone' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'cod_error' => '01',
+                'message_error' => 'Faltan campos requeridos o son inválidos.',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
         $client = Client::where('document', $request->document)
                         ->where('phone', $request->phone)
                         ->first();
